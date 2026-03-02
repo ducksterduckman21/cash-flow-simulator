@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feast or Famine Cash Flow Simulator | Two Palms Financial</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/recharts@2.5.0/dist/Recharts.js"></script>
+</head>
+<body class="bg-gray-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } = Recharts;
+
+    // Utility functions for calculations
+    const calculateStats = (revenues) => {
+      const validRevenues = revenues.filter(r => r > 0);
+      if (validRevenues.length === 0) return null;
+
+      const avg = validRevenues.reduce((a, b) => a + b, 0) / validRevenues.length;
+      const sorted = [...validRevenues].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)];
+      const min = Math.min(...validRevenues);
+      const max = Math.max(...validRevenues);
+      
+      // Calculate standard deviation
+      const variance = validRevenues.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / validRevenues.length;
+      const stdDev = Math.sqrt(variance);
+      const coefficientOfVariation = (stdDev / avg) * 100;
+
+      return { avg, median, min, max, stdDev, coefficientOfVariation };
+    };
+
+    const detectSeasonality = (revenues) => {
+      // Simple seasonality detection - look for recurring patterns
+      if (revenues.length < 12) return null;
+      
+      const monthlyAvgs = Array(12).fill(0).map(() => []);
+      revenues.forEach((rev, idx) => {
+        const month = idx % 12;
+        monthlyAvgs[month].push(rev);
+      });
+
+      const seasonalPattern = monthlyAvgs.map((vals, month) => ({
+        month: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month],
+        avg: vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0
+      }));
+
+      return seasonalPattern;
+    };
+
+    function CashFlowSimulator() {
+      const [step, setStep] = useState(1);
+      const [monthCount, setMonthCount] = useState(12);
+      const [revenues, setRevenues] = useState(Array(12).fill(''));
+      const [monthlyExpenses, setMonthlyExpenses] = useState('');
+      const [currentSavings, setCurrentSavings] = useState('');
+      const [email, setEmail] = useState('');
+      const [industry, setIndustry] = useState('');
+
+      const handleMonthCountChange = (count) => {
+        setMonthCount(count);
+        setRevenues(Array(count).fill(''));
+      };
+
+      const handleRevenueChange = (index, value) => {
+        const newRevenues = [...revenues];
+        newRevenues[index] = value;
+        setRevenues(newRevenues);
+      };
+
+      const stats = useMemo(() => {
+        const numRevenues = revenues.map(r => parseFloat(r) || 0);
+        return calculateStats(numRevenues);
+      }, [revenues]);
+
+      const seasonality = useMemo(() => {
+        const numRevenues = revenues.map(r => parseFloat(r) || 0);
+        return detectSeasonality(numRevenues);
+      }, [revenues]);
+
+      const analysis = useMemo(() => {
+        if (!stats || !monthlyExpenses) return null;
+
+        const expenses = parseFloat(monthlyExpenses) || 0;
+        const savings = parseFloat(currentSavings) || 0;
+
+        // Volatility-based emergency fund
+        let recommendedMonths;
+        if (stats.coefficientOfVariation < 20) {
+          recommendedMonths = 3; // Low volatility
+        } else if (stats.coefficientOfVariation < 40) {
+          recommendedMonths = 6; // Medium volatility
+        } else if (stats.coefficientOfVariation < 60) {
+          recommendedMonths = 9; // High volatility
+        } else {
+          recommendedMonths = 12; // Extreme volatility
+        }
+
+        const recommendedFund = expenses * recommendedMonths;
+        const currentRunway = savings / expenses;
+        const recommendedRunway = recommendedMonths;
+
+        // Scenario projections
+        const optimistic = stats.avg + (stats.stdDev * 0.5);
+        const realistic = stats.avg;
+        const pessimistic = stats.avg - (stats.stdDev * 0.5);
+
+        // Quarterly tax calculation (assume 25-30% for self-employed)
+        const avgQuarterlyRevenue = (stats.avg * 3);
+        const estimatedTaxRate = 0.28;
+        const quarterlyTaxSuggestion = avgQuarterlyRevenue * estimatedTaxRate;
+
+        // Survival scenarios
+        const survivalAtPessimistic = pessimistic < expenses ? 
+          "WARNING: At pessimistic revenue, you won't cover expenses" : 
+          "You can survive lean months";
+
+        return {
+          recommendedMonths,
+          recommendedFund,
+          currentRunway,
+          recommendedRunway,
+          optimistic,
+          realistic,
+          pessimistic,
+          quarterlyTaxSuggestion,
+          survivalAtPessimistic,
+          volatilityLevel: stats.coefficientOfVariation < 20 ? 'Low' : 
+                          stats.coefficientOfVariation < 40 ? 'Moderate' :
+                          stats.coefficientOfVariation < 60 ? 'High' : 'Extreme'
+        };
+      }, [stats, monthlyExpenses, currentSavings]);
+
+      const chartData = useMemo(() => {
+        if (!analysis) return [];
+        
+        return Array(12).fill(0).map((_, i) => ({
+          month: `Month ${i + 1}`,
+          optimistic: analysis.optimistic,
+          realistic: analysis.realistic,
+          pessimistic: analysis.pessimistic,
+          expenses: parseFloat(monthlyExpenses) || 0
+        }));
+      }, [analysis, monthlyExpenses]);
+
+      const renderStep1 = () => (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              How many months of revenue history do you have?
+            </h2>
+            <p className="text-gray-600">More data = better insights (12-24 months recommended)</p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[12, 18, 24].map(count => (
+              <button
+                key={count}
+                onClick={() => handleMonthCountChange(count)}
+                className={`p-4 rounded-lg border-2 text-center font-semibold transition-all ${
+                  monthCount === count
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-gray-300 hover:border-blue-400'
+                }`}
+              >
+                {count} months
+              </button>
+            ))}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Industry (optional)
+            </label>
+            <select
+              value={industry}
+              onChange={(e) => setIndustry(e.target.value)}
+              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select your industry...</option>
+              <option value="designer">Graphic Designer / Design Agency</option>
+              <option value="musician">Musician / Music Producer</option>
+              <option value="artist">Visual Artist / Illustrator</option>
+              <option value="photographer">Photographer / Videographer</option>
+              <option value="writer">Writer / Copywriter</option>
+              <option value="marketing">Marketing Agency</option>
+              <option value="consultant">Creative Consultant</option>
+              <option value="other">Other Creative Business</option>
+            </select>
+          </div>
+
+          <button
+            onClick={() => setStep(2)}
+            className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+          >
+            Continue to Revenue Entry →
+          </button>
+        </div>
+      );
+
+      const renderStep2 = () => (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              Enter your monthly revenue (last {monthCount} months)
+            </h2>
+            <p className="text-gray-600">Start with your most recent month and work backwards</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {revenues.map((rev, idx) => (
+              <div key={idx}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Month {monthCount - idx} ago {idx === 0 ? '(most recent)' : ''}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-3 text-gray-500">$</span>
+                  <input
+                    type="number"
+                    value={rev}
+                    onChange={(e) => handleRevenueChange(idx, e.target.value)}
+                    placeholder="0"
+                    className="w-full pl-8 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => setStep(1)}
+              className="flex-1 bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+            >
+              ← Back
+            </button>
+            <button
+              onClick={() => setStep(3)}
+              disabled={revenues.filter(r => r && parseFloat(r) > 0).length < 6}
+              className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              Continue to Expenses →
+            </button>
+          </div>
+        </div>
+      );
+
+      const renderStep3 = () => (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              What are your average monthly expenses?
+            </h2>
+            <p className="text-gray-600">Include both business and personal expenses you need to cover</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Monthly Expenses
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-3 text-gray-500">$</span>
+              <input
+                type="number"
+                value={monthlyExpenses}
+                onChange={(e) => setMonthlyExpenses(e.target.value)}
+                placeholder="5,000"
+                className="w-full pl-8 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Current Emergency Fund / Savings
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-3 text-gray-500">$</span>
+              <input
+                type="number"
+                value={currentSavings}
+                onChange={(e) => setCurrentSavings(e.target.value)}
+                placeholder="10,000"
+                className="w-full pl-8 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">How much liquid cash do you have for emergencies?</p>
+          </div>
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => setStep(2)}
+              className="flex-1 bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+            >
+              ← Back
+            </button>
+            <button
+              onClick={() => setStep(4)}
+              disabled={!monthlyExpenses || parseFloat(monthlyExpenses) <= 0}
+              className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              See My Results →
+            </button>
+          </div>
+        </div>
+      );
+
+      const renderStep4 = () => (
+        <div className="space-y-8">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              Your Cash Flow Analysis
+            </h2>
+            <p className="text-gray-600">Based on your {monthCount} months of revenue data</p>
+          </div>
+
+          {/* Volatility Alert */}
+          <div className={`p-6 rounded-lg ${
+            analysis.volatilityLevel === 'Extreme' ? 'bg-red-50 border-2 border-red-300' :
+            analysis.volatilityLevel === 'High' ? 'bg-orange-50 border-2 border-orange-300' :
+            analysis.volatilityLevel === 'Moderate' ? 'bg-yellow-50 border-2 border-yellow-300' :
+            'bg-green-50 border-2 border-green-300'
+          }`}>
+            <div className="flex items-start gap-4">
+              <div className="text-3xl">
+                {analysis.volatilityLevel === 'Extreme' ? '🚨' :
+                 analysis.volatilityLevel === 'High' ? '⚠️' :
+                 analysis.volatilityLevel === 'Moderate' ? '📊' : '✅'}
+              </div>
+              <div>
+                <h3 className="font-bold text-lg mb-1">
+                  {analysis.volatilityLevel} Income Volatility
+                </h3>
+                <p className="text-sm text-gray-700">
+                  Your revenue varies by {stats.coefficientOfVariation.toFixed(0)}% month-to-month.
+                  {analysis.volatilityLevel === 'Extreme' && ' This is extremely volatile - you need a larger safety net.'}
+                  {analysis.volatilityLevel === 'High' && ' This is high volatility - plan for significant ups and downs.'}
+                  {analysis.volatilityLevel === 'Moderate' && ' This is typical for creative businesses.'}
+                  {analysis.volatilityLevel === 'Low' && ' Your income is relatively stable!'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Key Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+              <div className="text-sm text-gray-600 mb-1">Average Monthly Revenue</div>
+              <div className="text-3xl font-bold text-blue-600">
+                ${stats.avg.toLocaleString('en-US', {maximumFractionDigits: 0})}
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
+              <div className="text-sm text-gray-600 mb-1">Best Month</div>
+              <div className="text-3xl font-bold text-green-600">
+                ${stats.max.toLocaleString('en-US', {maximumFractionDigits: 0})}
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-red-500">
+              <div className="text-sm text-gray-600 mb-1">Worst Month</div>
+              <div className="text-3xl font-bold text-red-600">
+                ${stats.min.toLocaleString('en-US', {maximumFractionDigits: 0})}
+              </div>
+            </div>
+          </div>
+
+          {/* Revenue Scenarios Chart */}
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h3 className="font-bold text-lg mb-4">12-Month Revenue Scenarios</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
+                <Legend />
+                <Area type="monotone" dataKey="optimistic" stackId="1" stroke="#10b981" fill="#d1fae5" name="Optimistic" />
+                <Area type="monotone" dataKey="realistic" stackId="2" stroke="#3b82f6" fill="#dbeafe" name="Realistic" />
+                <Area type="monotone" dataKey="pessimistic" stackId="3" stroke="#ef4444" fill="#fee2e2" name="Pessimistic" />
+                <Line type="monotone" dataKey="expenses" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" name="Monthly Expenses" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Emergency Fund Recommendation */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-8 rounded-lg shadow-lg">
+            <h3 className="font-bold text-2xl mb-4">💰 Your Emergency Fund Target</h3>
+            <div className="space-y-4">
+              <div>
+                <div className="text-sm opacity-90">Based on your {analysis.volatilityLevel.toLowerCase()} volatility, you need:</div>
+                <div className="text-5xl font-bold mt-2">
+                  ${analysis.recommendedFund.toLocaleString('en-US', {maximumFractionDigits: 0})}
+                </div>
+                <div className="text-sm opacity-90 mt-1">
+                  ({analysis.recommendedMonths} months of expenses)
+                </div>
+              </div>
+              
+              <div className="border-t border-white/30 pt-4">
+                <div className="flex justify-between items-center">
+                  <span>Current Savings:</span>
+                  <span className="font-bold">${parseFloat(currentSavings || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span>Gap to Fill:</span>
+                  <span className={`font-bold ${analysis.recommendedFund - parseFloat(currentSavings || 0) > 0 ? 'text-yellow-300' : 'text-green-300'}`}>
+                    ${Math.max(0, analysis.recommendedFund - parseFloat(currentSavings || 0)).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-white/10 p-4 rounded">
+                <div className="font-semibold mb-2">🏃 Your Current Runway</div>
+                <div className="text-2xl font-bold">
+                  {analysis.currentRunway.toFixed(1)} months
+                </div>
+                <div className="text-sm opacity-90 mt-1">
+                  {analysis.currentRunway < analysis.recommendedRunway ? 
+                    `You need ${(analysis.recommendedRunway - analysis.currentRunway).toFixed(1)} more months of runway` :
+                    'You have a healthy emergency fund! 🎉'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tax Planning */}
+          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-purple-500">
+            <h3 className="font-bold text-lg mb-3">📊 Quarterly Tax Suggestion</h3>
+            <p className="text-gray-600 mb-4">
+              Based on your average revenue, set aside approximately:
+            </p>
+            <div className="text-3xl font-bold text-purple-600 mb-2">
+              ${analysis.quarterlyTaxSuggestion.toLocaleString('en-US', {maximumFractionDigits: 0})}
+            </div>
+            <div className="text-sm text-gray-600">
+              per quarter for estimated taxes (~28% of revenue)
+            </div>
+          </div>
+
+          {/* Get Full Report CTA */}
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-8 rounded-lg shadow-lg">
+            <h3 className="font-bold text-2xl mb-3">📥 Get Your Full Cash Flow Report</h3>
+            <p className="mb-6 opacity-90">
+              Enter your email to receive a detailed PDF with:
+            </p>
+            <ul className="space-y-2 mb-6">
+              <li className="flex items-start gap-2">
+                <span>✓</span>
+                <span>Personalized emergency fund roadmap</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span>✓</span>
+                <span>12-month cash flow projections</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span>✓</span>
+                <span>Tax planning checklist for creative businesses</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span>✓</span>
+                <span>Action steps to stabilize your income</span>
+              </li>
+            </ul>
+
+            <div className="space-y-3">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="your@email.com"
+                className="w-full px-4 py-3 rounded-lg text-gray-900 focus:ring-2 focus:ring-white"
+              />
+              <button
+                onClick={() => alert('In production, this would send results to your email and add to CRM!')}
+                className="w-full bg-white text-green-600 py-3 px-6 rounded-lg font-bold hover:bg-gray-100 transition-colors"
+              >
+                Send Me My Free Report
+              </button>
+              <p className="text-xs opacity-75 text-center">
+                We respect your privacy. No spam, ever.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {setStep(1); setRevenues(Array(monthCount).fill('')); setMonthlyExpenses(''); setCurrentSavings(''); setEmail('');}}
+            className="w-full bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+          >
+            ← Start Over with New Data
+          </button>
+        </div>
+      );
+
+      return (
+        <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+          {/* Header */}
+          <header className="bg-white border-b shadow-sm">
+            <div className="max-w-4xl mx-auto px-4 py-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Two Palms Financial</h1>
+                  <p className="text-sm text-gray-600">Financial Planning for Creative Entrepreneurs</p>
+                </div>
+                <div className="hidden md:block">
+                  <div className="flex items-center gap-2">
+                    {[1, 2, 3, 4].map(s => (
+                      <div key={s} className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold ${
+                        step > s ? 'bg-green-500 text-white' :
+                        step === s ? 'bg-blue-600 text-white' :
+                        'bg-gray-200 text-gray-500'
+                      }`}>
+                        {step > s ? '✓' : s}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Content */}
+          <main className="max-w-4xl mx-auto px-4 py-8">
+            <div className="bg-white rounded-xl shadow-lg p-8">
+              {step === 1 && renderStep1()}
+              {step === 2 && renderStep2()}
+              {step === 3 && renderStep3()}
+              {step === 4 && renderStep4()}
+            </div>
+          </main>
+
+          {/* Footer */}
+          <footer className="bg-gray-900 text-white py-8 mt-16">
+            <div className="max-w-4xl mx-auto px-4 text-center">
+              <p className="text-gray-400 text-sm">
+                © 2026 Two Palms Financial • Helping creative business owners plan for financial freedom
+              </p>
+            </div>
+          </footer>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<CashFlowSimulator />, document.getElementById('root'));
+  </script>
+</body>
+</html>
