@@ -1,552 +1,749 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Feast or Famine Cash Flow Simulator | Two Palms Financial</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/recharts@2.5.0/dist/Recharts.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Two Palms Lumpy Smoothy Tool</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f8f6f1; --card-bg: #ffffff; --input-bg: #f3f1ec; --border: #e5e0d5;
+    --text-primary: #1a1814; --text-secondary: #5c564c; --text-muted: #9c9588;
+    --accent: #0ea58e; --accent-light: rgba(14,165,142,0.1); --accent-dark: #0c8a76;
+  }
+  body { font-family: 'DM Sans', 'Segoe UI', sans-serif; background: var(--bg); color: var(--text-primary); }
+  input[type="number"]::-webkit-inner-spin-button { opacity: 0.5; }
+  input[type="range"] { cursor: pointer; }
+  ::-webkit-scrollbar { height: 4px; width: 4px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  select { cursor: pointer; }
+  button { font-family: inherit; }
+  table { font-variant-numeric: tabular-nums; }
+</style>
 </head>
-<body class="bg-gray-50">
-  <div id="root"></div>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo } = React;
+const { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } = Recharts;
 
-  <script type="text/babel">
-    const { useState, useMemo } = React;
-    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } = Recharts;
+const STATE_HEALTH_COSTS = {
+  AL:498,AK:780,AZ:465,AR:470,CA:570,CO:510,CT:620,DE:590,FL:560,GA:520,HI:440,
+  ID:430,IL:530,IN:490,IA:460,KS:480,KY:470,LA:510,ME:540,MD:530,MA:560,MI:500,
+  MN:470,MS:490,MO:510,MT:520,NE:530,NV:480,NH:550,NJ:610,NM:460,NY:640,NC:530,
+  ND:460,OH:490,OK:510,OR:500,PA:530,RI:540,SC:510,SD:530,TN:480,TX:540,UT:440,
+  VT:620,VA:500,WA:520,WV:560,WI:510,WY:560,DC:570
+};
 
-    // Utility functions for calculations
-    const calculateStats = (revenues) => {
-      const validRevenues = revenues.filter(r => r > 0);
-      if (validRevenues.length === 0) return null;
+const STATES = [
+  {code:"AL",name:"Alabama"},{code:"AK",name:"Alaska"},{code:"AZ",name:"Arizona"},
+  {code:"AR",name:"Arkansas"},{code:"CA",name:"California"},{code:"CO",name:"Colorado"},
+  {code:"CT",name:"Connecticut"},{code:"DE",name:"Delaware"},{code:"DC",name:"Washington DC"},
+  {code:"FL",name:"Florida"},{code:"GA",name:"Georgia"},{code:"HI",name:"Hawaii"},
+  {code:"ID",name:"Idaho"},{code:"IL",name:"Illinois"},{code:"IN",name:"Indiana"},
+  {code:"IA",name:"Iowa"},{code:"KS",name:"Kansas"},{code:"KY",name:"Kentucky"},
+  {code:"LA",name:"Louisiana"},{code:"ME",name:"Maine"},{code:"MD",name:"Maryland"},
+  {code:"MA",name:"Massachusetts"},{code:"MI",name:"Michigan"},{code:"MN",name:"Minnesota"},
+  {code:"MS",name:"Mississippi"},{code:"MO",name:"Missouri"},{code:"MT",name:"Montana"},
+  {code:"NE",name:"Nebraska"},{code:"NV",name:"Nevada"},{code:"NH",name:"New Hampshire"},
+  {code:"NJ",name:"New Jersey"},{code:"NM",name:"New Mexico"},{code:"NY",name:"New York"},
+  {code:"NC",name:"North Carolina"},{code:"ND",name:"North Dakota"},{code:"OH",name:"Ohio"},
+  {code:"OK",name:"Oklahoma"},{code:"OR",name:"Oregon"},{code:"PA",name:"Pennsylvania"},
+  {code:"RI",name:"Rhode Island"},{code:"SC",name:"South Carolina"},{code:"SD",name:"South Dakota"},
+  {code:"TN",name:"Tennessee"},{code:"TX",name:"Texas"},{code:"UT",name:"Utah"},
+  {code:"VT",name:"Vermont"},{code:"VA",name:"Virginia"},{code:"WA",name:"Washington"},
+  {code:"WV",name:"West Virginia"},{code:"WI",name:"Wisconsin"},{code:"WY",name:"Wyoming"}
+];
 
-      const avg = validRevenues.reduce((a, b) => a + b, 0) / validRevenues.length;
-      const sorted = [...validRevenues].sort((a, b) => a - b);
-      const median = sorted[Math.floor(sorted.length / 2)];
-      const min = Math.min(...validRevenues);
-      const max = Math.max(...validRevenues);
-      
-      // Calculate standard deviation
-      const variance = validRevenues.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / validRevenues.length;
-      const stdDev = Math.sqrt(variance);
-      const coefficientOfVariation = (stdDev / avg) * 100;
+const TABS = [
+  {id:"setup",label:"Setup",icon:"⚙️"},
+  {id:"cash",label:"Cash Position",icon:"💵"},
+  {id:"pipeline",label:"Revenue Pipeline",icon:"📊"},
+  {id:"expenses",label:"Expenses",icon:"📋"},
+  {id:"ar",label:"A/R Schedule",icon:"📅"},
+  {id:"buckets",label:"Cash Buckets",icon:"🪣"},
+  {id:"dashboard",label:"Dashboard",icon:"📈"},
+  {id:"stress",label:"Stress Test",icon:"⚡"},
+];
 
-      return { avg, median, min, max, stdDev, coefficientOfVariation };
-    };
+const fmt = (n) => {
+  if (n == null || isNaN(n)) return "$0";
+  return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",minimumFractionDigits:0,maximumFractionDigits:0}).format(n);
+};
+const uid = () => Math.random().toString(36).slice(2,9);
+const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function getMonthLabel(offset) {
+  const d = new Date(); d.setMonth(d.getMonth()+offset);
+  return monthNames[d.getMonth()]+" "+d.getFullYear().toString().slice(2);
+}
 
-    const detectSeasonality = (revenues) => {
-      // Simple seasonality detection - look for recurring patterns
-      if (revenues.length < 12) return null;
-      
-      const monthlyAvgs = Array(12).fill(0).map(() => []);
-      revenues.forEach((rev, idx) => {
-        const month = idx % 12;
-        monthlyAvgs[month].push(rev);
+/* ── Reusable Components ── */
+function SliderWithLabel({label,value,onChange,min,max,step=1,format="dollar",helpText}) {
+  const display = format==="dollar"?fmt(value):format==="percent"?value+"%":value+" mo";
+  return (
+    <div style={{marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,fontSize:13}}>
+        <span style={{color:"var(--text-secondary)",fontWeight:500}}>{label}</span>
+        <span style={{color:"var(--accent)",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{display}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={e=>onChange(Number(e.target.value))}
+        style={{width:"100%",accentColor:"var(--accent)"}} />
+      {helpText && <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>{helpText}</div>}
+    </div>
+  );
+}
+
+function NumberInput({label,value,onChange,prefix="$",placeholder,small,helpText}) {
+  return (
+    <div style={{marginBottom:small?8:14,flex:small?1:undefined}}>
+      {label && <label style={{display:"block",fontSize:12,color:"var(--text-secondary)",marginBottom:4,fontWeight:500}}>{label}</label>}
+      <div style={{display:"flex",alignItems:"center",background:"var(--input-bg)",borderRadius:8,border:"1px solid var(--border)",overflow:"hidden"}}>
+        {prefix && <span style={{padding:"8px 0 8px 10px",color:"var(--text-muted)",fontSize:13,fontFamily:"'DM Mono',monospace"}}>{prefix}</span>}
+        <input type="number" value={value||""} onChange={e=>onChange(Number(e.target.value)||0)}
+          placeholder={placeholder||"0"}
+          style={{flex:1,border:"none",background:"none",padding:"8px 10px",fontSize:14,outline:"none",color:"var(--text-primary)",fontFamily:"'DM Mono',monospace",width:"100%"}} />
+      </div>
+      {helpText && <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>{helpText}</div>}
+    </div>
+  );
+}
+
+function SelectInput({label,value,onChange,options,helpText}) {
+  return (
+    <div style={{marginBottom:14}}>
+      {label && <label style={{display:"block",fontSize:12,color:"var(--text-secondary)",marginBottom:4,fontWeight:500}}>{label}</label>}
+      <select value={value} onChange={e=>onChange(e.target.value)}
+        style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--input-bg)",fontSize:14,color:"var(--text-primary)",outline:"none"}}>
+        {options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      {helpText && <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>{helpText}</div>}
+    </div>
+  );
+}
+
+function Card({title,children,accent,badge}) {
+  return (
+    <div style={{background:"var(--card-bg)",borderRadius:14,padding:"20px 22px",border:"1px solid var(--border)",marginBottom:18,borderLeft:accent?"4px solid "+accent:undefined}}>
+      {(title||badge) && (
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          {title && <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"var(--text-primary)"}}>{title}</h3>}
+          {badge && <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:badge.bg,color:badge.color,fontWeight:600}}>{badge.text}</span>}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function StatusPill({status}) {
+  const c = {healthy:{bg:"#dcfce7",color:"#166534",text:"Healthy"},caution:{bg:"#fef9c3",color:"#854d0e",text:"Caution"},danger:{bg:"#fee2e2",color:"#991b1b",text:"Danger"}}[status]||{bg:"#fef9c3",color:"#854d0e",text:"Caution"};
+  return <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:c.bg,color:c.color,fontWeight:700}}>{c.text}</span>;
+}
+
+function Btn({children,onClick,variant="primary",small,disabled}) {
+  const s = {primary:{background:"var(--accent)",color:"#fff",border:"none"},secondary:{background:"transparent",color:"var(--accent)",border:"1px solid var(--accent)"},danger:{background:"#ef4444",color:"#fff",border:"none"},ghost:{background:"var(--input-bg)",color:"var(--text-secondary)",border:"1px solid var(--border)"}}[variant];
+  return <button onClick={onClick} disabled={disabled} style={{...s,padding:small?"5px 12px":"9px 18px",borderRadius:8,fontSize:small?12:13,fontWeight:600,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.5:1,transition:"all 0.15s"}}>{children}</button>;
+}
+
+/* ── SETUP TAB ── */
+function SetupTab({config,setConfig}) {
+  return (
+    <div>
+      <Card title="Business Information">
+        <SelectInput label="Entity Type" value={config.entityType}
+          onChange={v=>setConfig(p=>({...p,entityType:v}))}
+          options={[{value:"sole_prop",label:"Sole Proprietorship / Single-Member LLC"},{value:"s_corp",label:"S-Corporation"}]}
+          helpText="S-Corp owners pay themselves a salary + distributions. Sole props take owner draws." />
+        <SelectInput label="State" value={config.state}
+          onChange={v=>setConfig(p=>({...p,state:v}))}
+          options={STATES.map(s=>({value:s.code,label:s.name}))} />
+        <NumberInput label="Max Concurrent Projects / Clients" value={config.maxConcurrent}
+          onChange={v=>setConfig(p=>({...p,maxConcurrent:v}))} prefix="#"
+          helpText="How many clients/projects can you handle at the same time?" />
+      </Card>
+
+      <Card title="Tax Settings">
+        <div style={{display:"flex",gap:8,marginBottom:16}}>
+          {["simple","detailed"].map(m=>(
+            <button key={m} onClick={()=>setConfig(p=>({...p,taxMode:m}))}
+              style={{flex:1,padding:"10px",borderRadius:8,border:"2px solid "+(config.taxMode===m?"var(--accent)":"var(--border)"),background:config.taxMode===m?"var(--accent-light)":"var(--card-bg)",color:config.taxMode===m?"var(--accent)":"var(--text-secondary)",fontWeight:600,fontSize:13,cursor:"pointer"}}>
+              {m==="simple"?"Simple (single rate)":"Detailed (fed + state + SE)"}
+            </button>
+          ))}
+        </div>
+        {config.taxMode==="simple" ? (
+          <SliderWithLabel label="Effective Tax Rate" value={config.taxSimpleRate} min={0} max={50} step={1}
+            onChange={v=>setConfig(p=>({...p,taxSimpleRate:v}))} format="percent"
+            helpText="Combined federal + state + self-employment tax rate" />
+        ) : (
+          <div>
+            <SliderWithLabel label="Federal Rate" value={config.taxFederal} min={0} max={37} step={1}
+              onChange={v=>setConfig(p=>({...p,taxFederal:v}))} format="percent" />
+            <SliderWithLabel label="State Rate" value={config.taxState} min={0} max={13} step={0.5}
+              onChange={v=>setConfig(p=>({...p,taxState:v}))} format="percent" />
+            {config.entityType==="sole_prop" && (
+              <SliderWithLabel label="Self-Employment Tax Rate" value={config.taxSE} min={0} max={15.3} step={0.1}
+                onChange={v=>setConfig(p=>({...p,taxSE:v}))} format="percent"
+                helpText="Standard SE tax is 15.3% (12.4% SS + 2.9% Medicare)" />
+            )}
+          </div>
+        )}
+      </Card>
+
+      {config.entityType==="s_corp" && (
+        <Card title="S-Corp Owner Compensation">
+          <NumberInput label="Annual Owner Salary (W-2)" value={config.ownerSalary}
+            onChange={v=>setConfig(p=>({...p,ownerSalary:v}))}
+            helpText="Your reasonable compensation salary, subject to payroll taxes" />
+          <SelectInput label="Payroll Frequency" value={config.payrollFreq}
+            onChange={v=>setConfig(p=>({...p,payrollFreq:v}))}
+            options={[{value:"biweekly",label:"Bi-Weekly (26 pay periods)"},{value:"semimonthly",label:"Semi-Monthly (24 pay periods)"},{value:"monthly",label:"Monthly (12 pay periods)"}]} />
+        </Card>
+      )}
+
+      <Card title="Profit-Taking Method">
+        <SelectInput label="How do you want to take profits?" value={config.profitMethod}
+          onChange={v=>setConfig(p=>({...p,profitMethod:v}))}
+          options={[
+            {value:"monthly_draw",label:"Monthly Fixed Draw"},
+            {value:"quarterly_trueup",label:"Quarterly True-Up"},
+            {value:"profit_first",label:"Profit First (% of revenue)"},
+            {value:"sweep_excess",label:"Sweep Excess Above Reserves"},
+          ]} />
+        {config.profitMethod==="monthly_draw" && (
+          <NumberInput label="Monthly Draw Amount" value={config.monthlyDraw}
+            onChange={v=>setConfig(p=>({...p,monthlyDraw:v}))} />
+        )}
+        {config.profitMethod==="profit_first" && (
+          <SliderWithLabel label="Profit Allocation %" value={config.profitFirstPct} min={5} max={50} step={1}
+            onChange={v=>setConfig(p=>({...p,profitFirstPct:v}))} format="percent" />
+        )}
+      </Card>
+
+      <Card title="Health Insurance">
+        <div style={{display:"flex",gap:8,marginBottom:14}}>
+          {[{v:true,l:"Company Plan"},{v:false,l:"No Company Plan"}].map(o=>(
+            <button key={String(o.v)} onClick={()=>setConfig(p=>({...p,hasHealthPlan:o.v}))}
+              style={{flex:1,padding:"10px",borderRadius:8,fontSize:13,fontWeight:600,cursor:"pointer",border:"2px solid "+(config.hasHealthPlan===o.v?"var(--accent)":"var(--border)"),background:config.hasHealthPlan===o.v?"var(--accent-light)":"var(--card-bg)",color:config.hasHealthPlan===o.v?"var(--accent)":"var(--text-secondary)"}}>
+              {o.l}
+            </button>
+          ))}
+        </div>
+        {config.hasHealthPlan && (
+          <div>
+            <NumberInput label="Adults Covered" value={config.healthAdults} prefix="#"
+              onChange={v=>setConfig(p=>({...p,healthAdults:v}))} />
+            <div style={{padding:"10px 14px",borderRadius:8,background:"var(--input-bg)",fontSize:13,color:"var(--text-secondary)"}}>
+              Estimated monthly cost: <strong style={{color:"var(--accent)",fontFamily:"'DM Mono',monospace"}}>{fmt((STATE_HEALTH_COSTS[config.state]||520)*(config.healthAdults||1))}</strong>
+              <span style={{fontSize:11,marginLeft:6}}>({config.state} avg per adult)</span>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <Card title="Retirement Savings">
+        <SelectInput label="Retirement Account Type" value={config.retirementType}
+          onChange={v=>setConfig(p=>({...p,retirementType:v}))}
+          options={[
+            {value:"none",label:"None / Not tracking"},
+            {value:"fixed",label:"Fixed Dollar Amount per Month"},
+            {value:"percent_salary",label:"% of Salary (S-Corp)"},
+            {value:"percent_revenue",label:"% of Net Revenue"},
+          ]} />
+        {config.retirementType==="fixed" && (
+          <NumberInput label="Monthly Contribution" value={config.retirementFixed}
+            onChange={v=>setConfig(p=>({...p,retirementFixed:v}))} />
+        )}
+        {(config.retirementType==="percent_salary"||config.retirementType==="percent_revenue") && (
+          <SliderWithLabel label={"% of "+(config.retirementType==="percent_salary"?"Salary":"Net Revenue")} value={config.retirementPct} min={1} max={25} step={1}
+            onChange={v=>setConfig(p=>({...p,retirementPct:v}))} format="percent" />
+        )}
+      </Card>
+
+      <Card title="Seasonality Pattern">
+        <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:12}}>Set relative revenue weight per month (100 = average). Higher = busier, lower = slower.</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+          {monthNames.map((m,i)=>(
+            <div key={m}>
+              <label style={{fontSize:11,color:"var(--text-secondary)",display:"block",marginBottom:2}}>{m}</label>
+              <input type="number" value={config.seasonality[i]}
+                onChange={e=>{const s=[...config.seasonality];s[i]=Number(e.target.value)||100;setConfig(p=>({...p,seasonality:s}));}}
+                style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid var(--border)",background:"var(--input-bg)",fontSize:13,fontFamily:"'DM Mono',monospace",color:"var(--text-primary)",textAlign:"center"}} />
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ── CASH POSITION TAB ── */
+function CashTab({config,setConfig}) {
+  return (
+    <div>
+      <Card title="Current Cash Position" accent="var(--accent)">
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+          <div>
+            <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Personal</div>
+            <NumberInput label="Personal Checking / Savings" value={config.personalCash}
+              onChange={v=>setConfig(p=>({...p,personalCash:v}))} />
+          </div>
+          <div>
+            <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Business</div>
+            <NumberInput label="Business Checking / Savings" value={config.businessCash}
+              onChange={v=>setConfig(p=>({...p,businessCash:v}))} />
+          </div>
+        </div>
+        <div style={{marginTop:14,padding:"14px 18px",borderRadius:10,background:"linear-gradient(135deg,var(--accent-light),rgba(14,165,142,0.08))",textAlign:"center"}}>
+          <div style={{fontSize:12,color:"var(--text-secondary)",marginBottom:4}}>Total Cash</div>
+          <div style={{fontSize:28,fontWeight:800,color:"var(--accent)",fontFamily:"'DM Mono',monospace"}}>
+            {fmt((config.personalCash||0)+(config.businessCash||0))}
+          </div>
+        </div>
+      </Card>
+
+      <Card title="Personal Income Needs (Monthly)">
+        <NumberInput label="🛟 Survival — bare minimum to keep the lights on" value={config.personalSurvival}
+          onChange={v=>setConfig(p=>({...p,personalSurvival:v}))}
+          helpText="Rent/mortgage, utilities, food, insurance, minimum debt payments" />
+        <NumberInput label="😊 Comfortable — the number that lets you breathe" value={config.personalComfortable}
+          onChange={v=>setConfig(p=>({...p,personalComfortable:v}))}
+          helpText="Survival + dining, travel, savings, subscriptions, fun money" />
+        <div style={{display:"flex",gap:14,marginTop:10}}>
+          <div style={{flex:1,padding:"10px 14px",borderRadius:8,background:"#fef3c7",textAlign:"center"}}>
+            <div style={{fontSize:11,color:"#92400e",marginBottom:2}}>Survival Runway</div>
+            <div style={{fontSize:18,fontWeight:800,color:"#b45309",fontFamily:"'DM Mono',monospace"}}>
+              {config.personalSurvival>0?Math.floor((config.personalCash||0)/config.personalSurvival)+" mo":"—"}
+            </div>
+          </div>
+          <div style={{flex:1,padding:"10px 14px",borderRadius:8,background:"#dcfce7",textAlign:"center"}}>
+            <div style={{fontSize:11,color:"#166534",marginBottom:2}}>Comfortable Runway</div>
+            <div style={{fontSize:18,fontWeight:800,color:"#15803d",fontFamily:"'DM Mono',monospace"}}>
+              {config.personalComfortable>0?Math.floor((config.personalCash||0)/config.personalComfortable)+" mo":"—"}
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ── PIPELINE TAB ── */
+function PipelineItem({item,onUpdate,onRemove,isProspect}) {
+  return (
+    <div style={{padding:"14px",borderRadius:10,background:"var(--input-bg)",border:"1px solid var(--border)",marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"start",marginBottom:10}}>
+        <input type="text" value={item.name} placeholder="Client / Project Name"
+          onChange={e=>onUpdate(item.id,"name",e.target.value)}
+          style={{border:"none",background:"none",fontSize:14,fontWeight:600,color:"var(--text-primary)",outline:"none",flex:1}} />
+        <button onClick={()=>onRemove(item.id)} style={{border:"none",background:"none",color:"#ef4444",cursor:"pointer",fontSize:16}}>×</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <NumberInput label="Total Project Value" value={item.amount} small onChange={v=>onUpdate(item.id,"amount",v)} />
+        <NumberInput label="Monthly Revenue" value={item.monthlyRevenue} small
+          onChange={v=>onUpdate(item.id,"monthlyRevenue",v)} helpText="If billed monthly (leave 0 if lump sum)" />
+        <div style={{marginBottom:8}}>
+          <label style={{fontSize:12,color:"var(--text-secondary)",marginBottom:4,display:"block",fontWeight:500}}>Expected Start / Payment</label>
+          <input type="date" value={item.paymentDate} onChange={e=>onUpdate(item.id,"paymentDate",e.target.value)}
+            style={{width:"100%",padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--input-bg)",fontSize:13,color:"var(--text-primary)"}} />
+        </div>
+        <NumberInput label="Project Duration (months)" value={item.projectDuration} prefix="#" small
+          onChange={v=>onUpdate(item.id,"projectDuration",v)} />
+        <NumberInput label="Payment Terms (days)" value={item.paymentTerms} prefix="#" small
+          onChange={v=>onUpdate(item.id,"paymentTerms",v)} helpText="Net 30, Net 60, etc." />
+        {isProspect && (
+          <div style={{marginBottom:8}}>
+            <label style={{fontSize:12,color:"var(--text-secondary)",marginBottom:4,display:"block",fontWeight:500}}>
+              Confidence: {item.confidence}%
+            </label>
+            <input type="range" min={5} max={95} step={5} value={item.confidence}
+              onChange={e=>onUpdate(item.id,"confidence",Number(e.target.value))}
+              style={{width:"100%",accentColor:item.confidence>=70?"#16a34a":item.confidence>=40?"#eab308":"#ef4444"}} />
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--text-muted)"}}>
+              <span>Unlikely</span><span>Likely</span><span>Almost certain</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PipelineTab({config,setConfig}) {
+  const addItem = (type) => {
+    const item = {id:uid(),type,name:"",amount:0,paymentDate:"",confidence:type==="current"?100:50,projectDuration:1,paymentTerms:30,monthlyRevenue:0};
+    setConfig(p=>({...p,pipeline:[...p.pipeline,item]}));
+  };
+  const updateItem = (id,field,value) => {
+    setConfig(p=>({...p,pipeline:p.pipeline.map(i=>i.id===id?{...i,[field]:value}:i)}));
+  };
+  const removeItem = (id) => {
+    setConfig(p=>({...p,pipeline:p.pipeline.filter(i=>i.id!==id)}));
+  };
+  const currentClients = config.pipeline.filter(i=>i.type==="current");
+  const prospects = config.pipeline.filter(i=>i.type==="prospect");
+  const activeCount = currentClients.length;
+  const capacityLeft = (config.maxConcurrent||5)-activeCount;
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:14,marginBottom:18}}>
+        <div style={{flex:1,padding:"12px",borderRadius:10,background:"var(--accent-light)",textAlign:"center"}}>
+          <div style={{fontSize:11,color:"var(--text-secondary)"}}>Active Clients</div>
+          <div style={{fontSize:22,fontWeight:800,color:"var(--accent)",fontFamily:"'DM Mono',monospace"}}>{activeCount}</div>
+        </div>
+        <div style={{flex:1,padding:"12px",borderRadius:10,background:capacityLeft>0?"#dcfce7":"#fee2e2",textAlign:"center"}}>
+          <div style={{fontSize:11,color:"var(--text-secondary)"}}>Capacity Left</div>
+          <div style={{fontSize:22,fontWeight:800,color:capacityLeft>0?"#15803d":"#dc2626",fontFamily:"'DM Mono',monospace"}}>{capacityLeft}</div>
+        </div>
+        <div style={{flex:1,padding:"12px",borderRadius:10,background:"#ede9fe",textAlign:"center"}}>
+          <div style={{fontSize:11,color:"var(--text-secondary)"}}>Prospects</div>
+          <div style={{fontSize:22,fontWeight:800,color:"#7c3aed",fontFamily:"'DM Mono',monospace"}}>{prospects.length}</div>
+        </div>
+      </div>
+      <Card title="Current Clients" badge={{text:activeCount+" active",bg:"var(--accent-light)",color:"var(--accent)"}}>
+        {currentClients.map(item=><PipelineItem key={item.id} item={item} onUpdate={updateItem} onRemove={removeItem} />)}
+        <Btn onClick={()=>addItem("current")} variant="secondary" small>+ Add Current Client</Btn>
+      </Card>
+      <Card title="Prospects & Pipeline" badge={capacityLeft<=0?{text:"At capacity — queued",bg:"#fee2e2",color:"#dc2626"}:undefined}>
+        {capacityLeft<=0 && (
+          <div style={{padding:"10px 14px",borderRadius:8,background:"#fef3c7",fontSize:12,color:"#92400e",marginBottom:14}}>
+            ⚠️ At max capacity ({config.maxConcurrent} concurrent). New prospects modeled as starting after current projects complete.
+          </div>
+        )}
+        {prospects.map(item=><PipelineItem key={item.id} item={item} onUpdate={updateItem} onRemove={removeItem} isProspect />)}
+        <Btn onClick={()=>addItem("prospect")} variant="secondary" small>+ Add Prospect</Btn>
+      </Card>
+    </div>
+  );
+}
+
+/* ── EXPENSES TAB ── */
+function ExpensesTab({config,setConfig}) {
+  const addExpense = (cat) => {
+    const item = {id:uid(),name:"",amount:0,frequency:"monthly",month:0,pctOfRevenue:10};
+    setConfig(p=>({...p,expenses:{...p.expenses,[cat]:[...p.expenses[cat],item]}}));
+  };
+  const updateExpense = (cat,id,field,value) => {
+    setConfig(p=>({...p,expenses:{...p.expenses,[cat]:p.expenses[cat].map(e=>e.id===id?{...e,[field]:value}:e)}}));
+  };
+  const removeExpense = (cat,id) => {
+    setConfig(p=>({...p,expenses:{...p.expenses,[cat]:p.expenses[cat].filter(e=>e.id!==id)}}));
+  };
+  const totalMonthlyFixed = config.expenses.fixed.reduce((s,e)=>{
+    if(e.frequency==="monthly") return s+(e.amount||0);
+    if(e.frequency==="quarterly") return s+(e.amount||0)/3;
+    if(e.frequency==="annual") return s+(e.amount||0)/12;
+    return s;
+  },0);
+
+  return (
+    <div>
+      <Card title="Fixed Expenses" badge={{text:fmt(totalMonthlyFixed)+"/mo",bg:"var(--accent-light)",color:"var(--accent)"}}>
+        <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:12}}>Recurring costs: rent, software, payroll, subscriptions, insurance</div>
+        {config.expenses.fixed.map(e=>(
+          <div key={e.id} style={{display:"flex",gap:8,alignItems:"end",marginBottom:8}}>
+            <div style={{flex:2}}>
+              <input type="text" value={e.name} placeholder="Expense name" onChange={ev=>updateExpense("fixed",e.id,"name",ev.target.value)}
+                style={{width:"100%",padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--input-bg)",fontSize:13,color:"var(--text-primary)"}} />
+            </div>
+            <div style={{flex:1}}><NumberInput value={e.amount} small onChange={v=>updateExpense("fixed",e.id,"amount",v)} /></div>
+            <select value={e.frequency} onChange={ev=>updateExpense("fixed",e.id,"frequency",ev.target.value)}
+              style={{padding:"7px 6px",borderRadius:8,border:"1px solid var(--border)",background:"var(--input-bg)",fontSize:12,color:"var(--text-primary)"}}>
+              <option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual">Annual</option>
+            </select>
+            <button onClick={()=>removeExpense("fixed",e.id)} style={{border:"none",background:"none",color:"#ef4444",cursor:"pointer",fontSize:16,padding:"4px"}}>×</button>
+          </div>
+        ))}
+        <Btn onClick={()=>addExpense("fixed")} variant="secondary" small>+ Add Fixed Expense</Btn>
+      </Card>
+
+      <Card title="Variable Expenses (% of Revenue)">
+        <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:12}}>Costs that scale with revenue: COGS, contractor fees, commissions</div>
+        {config.expenses.variable.map(e=>(
+          <div key={e.id} style={{display:"flex",gap:8,alignItems:"end",marginBottom:8}}>
+            <div style={{flex:2}}>
+              <input type="text" value={e.name} placeholder="Expense name" onChange={ev=>updateExpense("variable",e.id,"name",ev.target.value)}
+                style={{width:"100%",padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--input-bg)",fontSize:13,color:"var(--text-primary)"}} />
+            </div>
+            <div style={{flex:1}}><NumberInput value={e.pctOfRevenue} prefix="%" small onChange={v=>updateExpense("variable",e.id,"pctOfRevenue",v)} /></div>
+            <button onClick={()=>removeExpense("variable",e.id)} style={{border:"none",background:"none",color:"#ef4444",cursor:"pointer",fontSize:16,padding:"4px"}}>×</button>
+          </div>
+        ))}
+        <Btn onClick={()=>addExpense("variable")} variant="secondary" small>+ Add Variable Expense</Btn>
+      </Card>
+
+      <Card title="One-Off Expenses">
+        <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:12}}>Planned one-time costs: equipment, conferences, annual renewals</div>
+        {config.expenses.oneOff.map(e=>(
+          <div key={e.id} style={{display:"flex",gap:8,alignItems:"end",marginBottom:8}}>
+            <div style={{flex:2}}>
+              <input type="text" value={e.name} placeholder="Expense name" onChange={ev=>updateExpense("oneOff",e.id,"name",ev.target.value)}
+                style={{width:"100%",padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--input-bg)",fontSize:13,color:"var(--text-primary)"}} />
+            </div>
+            <div style={{flex:1}}><NumberInput value={e.amount} small onChange={v=>updateExpense("oneOff",e.id,"amount",v)} /></div>
+            <select value={e.month} onChange={ev=>updateExpense("oneOff",e.id,"month",Number(ev.target.value))}
+              style={{padding:"7px 6px",borderRadius:8,border:"1px solid var(--border)",background:"var(--input-bg)",fontSize:12,color:"var(--text-primary)"}}>
+              {Array.from({length:12},(_,i)=><option key={i} value={i}>{getMonthLabel(i)}</option>)}
+            </select>
+            <button onClick={()=>removeExpense("oneOff",e.id)} style={{border:"none",background:"none",color:"#ef4444",cursor:"pointer",fontSize:16,padding:"4px"}}>×</button>
+          </div>
+        ))}
+        <Btn onClick={()=>addExpense("oneOff")} variant="secondary" small>+ Add One-Off Expense</Btn>
+      </Card>
+    </div>
+  );
+}
+
+/* ── A/R SCHEDULE TAB ── */
+function ARTab({config}) {
+  const today = new Date();
+  const agingColors = {overdue:"#ef4444",current:"#16a34a","30-60":"#eab308","60-90":"#f97316","90+":"#ef4444"};
+  const arItems = config.pipeline.filter(i=>i.amount>0&&i.paymentDate).map(i=>{
+    const payDate = new Date(i.paymentDate);
+    const actualPayDate = new Date(payDate);
+    actualPayDate.setDate(actualPayDate.getDate()+(i.paymentTerms||0));
+    const daysOut = Math.ceil((actualPayDate-today)/(1000*60*60*24));
+    const conf = i.type==="current"?95:(i.confidence||50);
+    const baseAmt = i.monthlyRevenue>0?i.monthlyRevenue:i.amount;
+    const weightedAmount = baseAmt*(conf/100);
+    const aging = daysOut<0?"overdue":daysOut<=30?"current":daysOut<=60?"30-60":daysOut<=90?"60-90":"90+";
+    return {...i,actualPayDate,daysOut,weightedAmount,aging,conf,baseAmt};
+  }).sort((a,b)=>a.daysOut-b.daysOut);
+
+  const totalExpected = arItems.reduce((s,i)=>s+i.baseAmt,0);
+  const totalWeighted = arItems.reduce((s,i)=>s+i.weightedAmount,0);
+
+  return (
+    <div>
+      <Card title="Accounts Receivable Schedule">
+        <div style={{display:"flex",gap:14,marginBottom:18}}>
+          <div style={{flex:1,padding:"10px 14px",borderRadius:8,background:"var(--input-bg)",textAlign:"center"}}>
+            <div style={{fontSize:11,color:"var(--text-muted)"}}>Total Expected</div>
+            <div style={{fontSize:18,fontWeight:800,color:"var(--text-primary)",fontFamily:"'DM Mono',monospace"}}>{fmt(totalExpected)}</div>
+          </div>
+          <div style={{flex:1,padding:"10px 14px",borderRadius:8,background:"var(--accent-light)",textAlign:"center"}}>
+            <div style={{fontSize:11,color:"var(--text-muted)"}}>Confidence-Weighted</div>
+            <div style={{fontSize:18,fontWeight:800,color:"var(--accent)",fontFamily:"'DM Mono',monospace"}}>{fmt(totalWeighted)}</div>
+          </div>
+        </div>
+        {arItems.length===0 ? (
+          <div style={{textAlign:"center",padding:30,color:"var(--text-muted)",fontSize:13}}>Add clients in the Revenue Pipeline tab to see your A/R schedule</div>
+        ) : (
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{borderBottom:"2px solid var(--border)"}}>
+                  {["Client","Amount","Due Date","Days Out","Confidence","Weighted $","Aging"].map(h=>(
+                    <th key={h} style={{padding:"8px 10px",textAlign:"left",fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.5}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {arItems.map(item=>(
+                  <tr key={item.id} style={{borderBottom:"1px solid var(--border)"}}>
+                    <td style={{padding:"10px",fontWeight:600,color:"var(--text-primary)"}}>{item.name||"Unnamed"}</td>
+                    <td style={{padding:"10px",fontFamily:"'DM Mono',monospace"}}>{fmt(item.baseAmt)}</td>
+                    <td style={{padding:"10px",fontSize:12}}>{item.actualPayDate.toLocaleDateString()}</td>
+                    <td style={{padding:"10px",fontFamily:"'DM Mono',monospace",color:item.daysOut<0?"#ef4444":"var(--text-primary)"}}>{item.daysOut}d</td>
+                    <td style={{padding:"10px"}}><span style={{fontFamily:"'DM Mono',monospace",color:item.conf>=70?"#16a34a":item.conf>=40?"#eab308":"#ef4444"}}>{item.conf}%</span></td>
+                    <td style={{padding:"10px",fontFamily:"'DM Mono',monospace",fontWeight:600,color:"var(--accent)"}}>{fmt(item.weightedAmount)}</td>
+                    <td style={{padding:"10px"}}><span style={{fontSize:11,padding:"2px 8px",borderRadius:10,background:agingColors[item.aging]+"22",color:agingColors[item.aging],fontWeight:600}}>{item.aging}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* ── CASH BUCKETS TAB ── */
+function BucketBar({label,current,target,note}) {
+  const pctFill = target>0?Math.min(current/target,2):0;
+  const status = pctFill>=1?"healthy":pctFill>=0.6?"caution":"danger";
+  const barColors = {healthy:"#16a34a",caution:"#eab308",danger:"#ef4444"};
+  return (
+    <div style={{marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}>
+        <span style={{color:"var(--text-secondary)",fontWeight:500}}>{label} {note && <span style={{fontSize:10,color:"var(--text-muted)"}}>{note}</span>}</span>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:11}}>
+          <span style={{color:barColors[status]}}>{fmt(current)}</span> / {fmt(target)}
+        </span>
+      </div>
+      <div style={{height:10,borderRadius:5,background:"var(--input-bg)",overflow:"hidden"}}>
+        <div style={{height:"100%",width:Math.min(pctFill*100,100)+"%",borderRadius:5,background:barColors[status],transition:"width 0.4s ease"}} />
+      </div>
+    </div>
+  );
+}
+
+function BucketsTab({config,setConfig}) {
+  const monthlyBizExpenses = config.expenses.fixed.reduce((s,e)=>{
+    if(e.frequency==="monthly") return s+(e.amount||0);
+    if(e.frequency==="quarterly") return s+(e.amount||0)/3;
+    if(e.frequency==="annual") return s+(e.amount||0)/12;
+    return s;
+  },0);
+
+  return (
+    <div>
+      <Card title="Personal Cash Targets">
+        <SliderWithLabel label="Personal Checking (months of survival expenses)"
+          value={config.buckets.personalCheckingMonths} min={0.5} max={3} step={0.5}
+          onChange={v=>setConfig(p=>({...p,buckets:{...p.buckets,personalCheckingMonths:v}}))} format="months"
+          helpText={"Target: "+fmt((config.personalSurvival||0)*config.buckets.personalCheckingMonths)} />
+        <SliderWithLabel label="Personal Emergency Fund (months of comfortable expenses)"
+          value={config.buckets.personalEmergencyMonths} min={1} max={12} step={1}
+          onChange={v=>setConfig(p=>({...p,buckets:{...p.buckets,personalEmergencyMonths:v}}))} format="months"
+          helpText={"Target: "+fmt((config.personalComfortable||0)*config.buckets.personalEmergencyMonths)} />
+      </Card>
+      <Card title="Business Cash Targets">
+        <SliderWithLabel label="Business Operating Reserve (months of biz expenses)"
+          value={config.buckets.bizOperatingMonths} min={1} max={6} step={0.5}
+          onChange={v=>setConfig(p=>({...p,buckets:{...p.buckets,bizOperatingMonths:v}}))} format="months"
+          helpText={"Target: "+fmt(monthlyBizExpenses*config.buckets.bizOperatingMonths)} />
+        <SliderWithLabel label="Tax Reserve (% of YTD profit)"
+          value={config.buckets.taxReservePct} min={10} max={50} step={1}
+          onChange={v=>setConfig(p=>({...p,buckets:{...p.buckets,taxReservePct:v}}))} format="percent"
+          helpText="Set aside this % of every dollar of profit for taxes" />
+        <NumberInput label="Business Cash Reserve Target (static amount)"
+          value={config.buckets.bizCashReserve}
+          onChange={v=>setConfig(p=>({...p,buckets:{...p.buckets,bizCashReserve:v}}))}
+          helpText="Your 'sleep at night' number — the cash floor you never dip below" />
+      </Card>
+      <Card title="Bucket Targets vs. Current Cash">
+        <BucketBar label="Personal Checking" current={config.personalCash||0}
+          target={(config.personalSurvival||0)*config.buckets.personalCheckingMonths} />
+        <BucketBar label="Personal Emergency" current={0}
+          target={(config.personalComfortable||0)*config.buckets.personalEmergencyMonths} note="(track separately)" />
+        <BucketBar label="Biz Operating" current={config.businessCash||0}
+          target={monthlyBizExpenses*config.buckets.bizOperatingMonths} />
+        <BucketBar label="Biz Cash Reserve" current={config.businessCash||0}
+          target={config.buckets.bizCashReserve||0} />
+      </Card>
+    </div>
+  );
+}
+
+/* ── PROJECTION ENGINE ── */
+function useProjections(config, stressConfig) {
+  return useMemo(()=>{
+    const months = 12;
+    const projections = [];
+    const today = new Date();
+    let runningBizCash = config.businessCash||0;
+    let runningPersonalCash = config.personalCash||0;
+    let ytdRevenue = 0;
+    let ytdExpenses = 0;
+
+    const taxRate = config.taxMode==="simple"
+      ? (config.taxSimpleRate||25)/100
+      : ((config.taxFederal||22)+(config.taxState||5)+(config.entityType==="sole_prop"?(config.taxSE||15.3):0))/100;
+
+    const monthlyFixed = config.expenses.fixed.reduce((s,e)=>{
+      if(e.frequency==="monthly") return s+(e.amount||0);
+      if(e.frequency==="quarterly") return s+(e.amount||0)/3;
+      if(e.frequency==="annual") return s+(e.amount||0)/12;
+      return s;
+    },0);
+
+    const variablePct = config.expenses.variable.reduce((s,e)=>s+(e.pctOfRevenue||0),0)/100;
+
+    const healthCost = config.hasHealthPlan?(STATE_HEALTH_COSTS[config.state]||520)*(config.healthAdults||1):0;
+
+    const retirementMonthly = config.retirementType==="fixed"?(config.retirementFixed||0)
+      :config.retirementType==="percent_salary"?((config.ownerSalary||0)*(config.retirementPct||10)/100/12):0;
+
+    const ownerMonthlySalary = config.entityType==="s_corp"?(config.ownerSalary||0)/12:0;
+
+    const sm = stressConfig||{revenueMult:1,expenseMult:1,delayDays:0,lostClientIdx:-1};
+
+    for(let m=0;m<months;m++) {
+      const monthDate = new Date(today);
+      monthDate.setMonth(monthDate.getMonth()+m);
+      const monthIdx = monthDate.getMonth();
+      const seasonMult = (config.seasonality[monthIdx]||100)/100;
+
+      let monthRevenue = 0;
+      config.pipeline.forEach((item,idx)=>{
+        if(sm.lostClientIdx===idx) return;
+        if(!item.paymentDate||!item.amount) return;
+        const startDate = new Date(item.paymentDate);
+        startDate.setDate(startDate.getDate()+(item.paymentTerms||0)+sm.delayDays);
+        const startMonth = (startDate.getFullYear()-today.getFullYear())*12+startDate.getMonth()-today.getMonth();
+        const duration = item.projectDuration||1;
+        const endMonth = startMonth+duration-1;
+        if(m>=startMonth&&m<=endMonth) {
+          const conf = item.type==="current"?0.95:(item.confidence||50)/100;
+          const monthlyAmt = item.monthlyRevenue>0?item.monthlyRevenue:item.amount/duration;
+          monthRevenue += monthlyAmt*conf*seasonMult*sm.revenueMult;
+        }
       });
 
-      const seasonalPattern = monthlyAvgs.map((vals, month) => ({
-        month: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month],
-        avg: vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0
-      }));
+      const retFromRev = config.retirementType==="percent_revenue"?monthRevenue*(config.retirementPct||10)/100:0;
 
-      return seasonalPattern;
-    };
+      let monthExpenses = (monthlyFixed+healthCost+retirementMonthly+retFromRev+ownerMonthlySalary)*sm.expenseMult;
+      monthExpenses += monthRevenue*variablePct;
 
-    function CashFlowSimulator() {
-      const [step, setStep] = useState(1);
-      const [monthCount, setMonthCount] = useState(12);
-      const [revenues, setRevenues] = useState(Array(12).fill(''));
-      const [monthlyExpenses, setMonthlyExpenses] = useState('');
-      const [currentSavings, setCurrentSavings] = useState('');
-      const [email, setEmail] = useState('');
-      const [industry, setIndustry] = useState('');
+      config.expenses.oneOff.forEach(e=>{if(e.month===m) monthExpenses+=(e.amount||0);});
 
-      const handleMonthCountChange = (count) => {
-        setMonthCount(count);
-        setRevenues(Array(count).fill(''));
-      };
+      const isQuarterlyTaxMonth = [3,5,8,0].includes(monthIdx);
+      const quarterlyTaxPayment = isQuarterlyTaxMonth?Math.max(0,(ytdRevenue-ytdExpenses)*taxRate/4):0;
 
-      const handleRevenueChange = (index, value) => {
-        const newRevenues = [...revenues];
-        newRevenues[index] = value;
-        setRevenues(newRevenues);
-      };
+      const netCashFlow = monthRevenue-monthExpenses-quarterlyTaxPayment;
+      ytdRevenue += monthRevenue;
+      ytdExpenses += monthExpenses;
 
-      const stats = useMemo(() => {
-        const numRevenues = revenues.map(r => parseFloat(r) || 0);
-        return calculateStats(numRevenues);
-      }, [revenues]);
+      let ownerDraw = 0;
+      if(config.profitMethod==="monthly_draw") ownerDraw=config.monthlyDraw||0;
+      else if(config.profitMethod==="profit_first") ownerDraw=monthRevenue*(config.profitFirstPct||10)/100;
+      else if(config.profitMethod==="sweep_excess") {
+        const reserveTarget=(config.buckets.bizCashReserve||0)+monthlyFixed*(config.buckets.bizOperatingMonths||2);
+        const excess=runningBizCash+netCashFlow-reserveTarget;
+        ownerDraw=Math.max(0,excess);
+      } else if(config.profitMethod==="quarterly_trueup"&&m%3===2) {
+        const profit=ytdRevenue-ytdExpenses;
+        ownerDraw=Math.max(0,profit*0.5/4);
+      }
 
-      const seasonality = useMemo(() => {
-        const numRevenues = revenues.map(r => parseFloat(r) || 0);
-        return detectSeasonality(numRevenues);
-      }, [revenues]);
+      runningBizCash += netCashFlow-ownerDraw;
+      runningPersonalCash += ownerDraw+ownerMonthlySalary-(config.personalComfortable||0);
 
-      const analysis = useMemo(() => {
-        if (!stats || !monthlyExpenses) return null;
-
-        const expenses = parseFloat(monthlyExpenses) || 0;
-        const savings = parseFloat(currentSavings) || 0;
-
-        // Volatility-based emergency fund
-        let recommendedMonths;
-        if (stats.coefficientOfVariation < 20) {
-          recommendedMonths = 3; // Low volatility
-        } else if (stats.coefficientOfVariation < 40) {
-          recommendedMonths = 6; // Medium volatility
-        } else if (stats.coefficientOfVariation < 60) {
-          recommendedMonths = 9; // High volatility
-        } else {
-          recommendedMonths = 12; // Extreme volatility
-        }
-
-        const recommendedFund = expenses * recommendedMonths;
-        const currentRunway = savings / expenses;
-        const recommendedRunway = recommendedMonths;
-
-        // Scenario projections
-        const optimistic = stats.avg + (stats.stdDev * 0.5);
-        const realistic = stats.avg;
-        const pessimistic = stats.avg - (stats.stdDev * 0.5);
-
-        // Quarterly tax calculation (assume 25-30% for self-employed)
-        const avgQuarterlyRevenue = (stats.avg * 3);
-        const estimatedTaxRate = 0.28;
-        const quarterlyTaxSuggestion = avgQuarterlyRevenue * estimatedTaxRate;
-
-        // Survival scenarios
-        const survivalAtPessimistic = pessimistic < expenses ? 
-          "WARNING: At pessimistic revenue, you won't cover expenses" : 
-          "You can survive lean months";
-
-        return {
-          recommendedMonths,
-          recommendedFund,
-          currentRunway,
-          recommendedRunway,
-          optimistic,
-          realistic,
-          pessimistic,
-          quarterlyTaxSuggestion,
-          survivalAtPessimistic,
-          volatilityLevel: stats.coefficientOfVariation < 20 ? 'Low' : 
-                          stats.coefficientOfVariation < 40 ? 'Moderate' :
-                          stats.coefficientOfVariation < 60 ? 'High' : 'Extreme'
-        };
-      }, [stats, monthlyExpenses, currentSavings]);
-
-      const chartData = useMemo(() => {
-        if (!analysis) return [];
-        
-        return Array(12).fill(0).map((_, i) => ({
-          month: `Month ${i + 1}`,
-          optimistic: analysis.optimistic,
-          realistic: analysis.realistic,
-          pessimistic: analysis.pessimistic,
-          expenses: parseFloat(monthlyExpenses) || 0
-        }));
-      }, [analysis, monthlyExpenses]);
-
-      const renderStep1 = () => (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              How many months of revenue history do you have?
-            </h2>
-            <p className="text-gray-600">More data = better insights (12-24 months recommended)</p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[12, 18, 24].map(count => (
-              <button
-                key={count}
-                onClick={() => handleMonthCountChange(count)}
-                className={`p-4 rounded-lg border-2 text-center font-semibold transition-all ${
-                  monthCount === count
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
-                    : 'border-gray-300 hover:border-blue-400'
-                }`}
-              >
-                {count} months
-              </button>
-            ))}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Industry (optional)
-            </label>
-            <select
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Select your industry...</option>
-              <option value="designer">Graphic Designer / Design Agency</option>
-              <option value="musician">Musician / Music Producer</option>
-              <option value="artist">Visual Artist / Illustrator</option>
-              <option value="photographer">Photographer / Videographer</option>
-              <option value="writer">Writer / Copywriter</option>
-              <option value="marketing">Marketing Agency</option>
-              <option value="consultant">Creative Consultant</option>
-              <option value="other">Other Creative Business</option>
-            </select>
-          </div>
-
-          <button
-            onClick={() => setStep(2)}
-            className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-          >
-            Continue to Revenue Entry →
-          </button>
-        </div>
-      );
-
-      const renderStep2 = () => (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              Enter your monthly revenue (last {monthCount} months)
-            </h2>
-            <p className="text-gray-600">Start with your most recent month and work backwards</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {revenues.map((rev, idx) => (
-              <div key={idx}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Month {monthCount - idx} ago {idx === 0 ? '(most recent)' : ''}
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-3 text-gray-500">$</span>
-                  <input
-                    type="number"
-                    value={rev}
-                    onChange={(e) => handleRevenueChange(idx, e.target.value)}
-                    placeholder="0"
-                    className="w-full pl-8 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-4">
-            <button
-              onClick={() => setStep(1)}
-              className="flex-1 bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-            >
-              ← Back
-            </button>
-            <button
-              onClick={() => setStep(3)}
-              disabled={revenues.filter(r => r && parseFloat(r) > 0).length < 6}
-              className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-              Continue to Expenses →
-            </button>
-          </div>
-        </div>
-      );
-
-      const renderStep3 = () => (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              What are your average monthly expenses?
-            </h2>
-            <p className="text-gray-600">Include both business and personal expenses you need to cover</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Monthly Expenses
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-3 text-gray-500">$</span>
-              <input
-                type="number"
-                value={monthlyExpenses}
-                onChange={(e) => setMonthlyExpenses(e.target.value)}
-                placeholder="5,000"
-                className="w-full pl-8 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Current Emergency Fund / Savings
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-3 text-gray-500">$</span>
-              <input
-                type="number"
-                value={currentSavings}
-                onChange={(e) => setCurrentSavings(e.target.value)}
-                placeholder="10,000"
-                className="w-full pl-8 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <p className="text-xs text-gray-500 mt-1">How much liquid cash do you have for emergencies?</p>
-          </div>
-
-          <div className="flex gap-4">
-            <button
-              onClick={() => setStep(2)}
-              className="flex-1 bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-            >
-              ← Back
-            </button>
-            <button
-              onClick={() => setStep(4)}
-              disabled={!monthlyExpenses || parseFloat(monthlyExpenses) <= 0}
-              className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-              See My Results →
-            </button>
-          </div>
-        </div>
-      );
-
-      const renderStep4 = () => (
-        <div className="space-y-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              Your Cash Flow Analysis
-            </h2>
-            <p className="text-gray-600">Based on your {monthCount} months of revenue data</p>
-          </div>
-
-          {/* Volatility Alert */}
-          <div className={`p-6 rounded-lg ${
-            analysis.volatilityLevel === 'Extreme' ? 'bg-red-50 border-2 border-red-300' :
-            analysis.volatilityLevel === 'High' ? 'bg-orange-50 border-2 border-orange-300' :
-            analysis.volatilityLevel === 'Moderate' ? 'bg-yellow-50 border-2 border-yellow-300' :
-            'bg-green-50 border-2 border-green-300'
-          }`}>
-            <div className="flex items-start gap-4">
-              <div className="text-3xl">
-                {analysis.volatilityLevel === 'Extreme' ? '🚨' :
-                 analysis.volatilityLevel === 'High' ? '⚠️' :
-                 analysis.volatilityLevel === 'Moderate' ? '📊' : '✅'}
-              </div>
-              <div>
-                <h3 className="font-bold text-lg mb-1">
-                  {analysis.volatilityLevel} Income Volatility
-                </h3>
-                <p className="text-sm text-gray-700">
-                  Your revenue varies by {stats.coefficientOfVariation.toFixed(0)}% month-to-month.
-                  {analysis.volatilityLevel === 'Extreme' && ' This is extremely volatile - you need a larger safety net.'}
-                  {analysis.volatilityLevel === 'High' && ' This is high volatility - plan for significant ups and downs.'}
-                  {analysis.volatilityLevel === 'Moderate' && ' This is typical for creative businesses.'}
-                  {analysis.volatilityLevel === 'Low' && ' Your income is relatively stable!'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Key Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
-              <div className="text-sm text-gray-600 mb-1">Average Monthly Revenue</div>
-              <div className="text-3xl font-bold text-blue-600">
-                ${stats.avg.toLocaleString('en-US', {maximumFractionDigits: 0})}
-              </div>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
-              <div className="text-sm text-gray-600 mb-1">Best Month</div>
-              <div className="text-3xl font-bold text-green-600">
-                ${stats.max.toLocaleString('en-US', {maximumFractionDigits: 0})}
-              </div>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-red-500">
-              <div className="text-sm text-gray-600 mb-1">Worst Month</div>
-              <div className="text-3xl font-bold text-red-600">
-                ${stats.min.toLocaleString('en-US', {maximumFractionDigits: 0})}
-              </div>
-            </div>
-          </div>
-
-          {/* Revenue Scenarios Chart */}
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="font-bold text-lg mb-4">12-Month Revenue Scenarios</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
-                <Legend />
-                <Area type="monotone" dataKey="optimistic" stackId="1" stroke="#10b981" fill="#d1fae5" name="Optimistic" />
-                <Area type="monotone" dataKey="realistic" stackId="2" stroke="#3b82f6" fill="#dbeafe" name="Realistic" />
-                <Area type="monotone" dataKey="pessimistic" stackId="3" stroke="#ef4444" fill="#fee2e2" name="Pessimistic" />
-                <Line type="monotone" dataKey="expenses" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" name="Monthly Expenses" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Emergency Fund Recommendation */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-8 rounded-lg shadow-lg">
-            <h3 className="font-bold text-2xl mb-4">💰 Your Emergency Fund Target</h3>
-            <div className="space-y-4">
-              <div>
-                <div className="text-sm opacity-90">Based on your {analysis.volatilityLevel.toLowerCase()} volatility, you need:</div>
-                <div className="text-5xl font-bold mt-2">
-                  ${analysis.recommendedFund.toLocaleString('en-US', {maximumFractionDigits: 0})}
-                </div>
-                <div className="text-sm opacity-90 mt-1">
-                  ({analysis.recommendedMonths} months of expenses)
-                </div>
-              </div>
-              
-              <div className="border-t border-white/30 pt-4">
-                <div className="flex justify-between items-center">
-                  <span>Current Savings:</span>
-                  <span className="font-bold">${parseFloat(currentSavings || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  <span>Gap to Fill:</span>
-                  <span className={`font-bold ${analysis.recommendedFund - parseFloat(currentSavings || 0) > 0 ? 'text-yellow-300' : 'text-green-300'}`}>
-                    ${Math.max(0, analysis.recommendedFund - parseFloat(currentSavings || 0)).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              <div className="bg-white/10 p-4 rounded">
-                <div className="font-semibold mb-2">🏃 Your Current Runway</div>
-                <div className="text-2xl font-bold">
-                  {analysis.currentRunway.toFixed(1)} months
-                </div>
-                <div className="text-sm opacity-90 mt-1">
-                  {analysis.currentRunway < analysis.recommendedRunway ? 
-                    `You need ${(analysis.recommendedRunway - analysis.currentRunway).toFixed(1)} more months of runway` :
-                    'You have a healthy emergency fund! 🎉'}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Tax Planning */}
-          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-purple-500">
-            <h3 className="font-bold text-lg mb-3">📊 Quarterly Tax Suggestion</h3>
-            <p className="text-gray-600 mb-4">
-              Based on your average revenue, set aside approximately:
-            </p>
-            <div className="text-3xl font-bold text-purple-600 mb-2">
-              ${analysis.quarterlyTaxSuggestion.toLocaleString('en-US', {maximumFractionDigits: 0})}
-            </div>
-            <div className="text-sm text-gray-600">
-              per quarter for estimated taxes (~28% of revenue)
-            </div>
-          </div>
-
-          {/* Get Full Report CTA */}
-          <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-8 rounded-lg shadow-lg">
-            <h3 className="font-bold text-2xl mb-3">📥 Get Your Full Cash Flow Report</h3>
-            <p className="mb-6 opacity-90">
-              Enter your email to receive a detailed PDF with:
-            </p>
-            <ul className="space-y-2 mb-6">
-              <li className="flex items-start gap-2">
-                <span>✓</span>
-                <span>Personalized emergency fund roadmap</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span>✓</span>
-                <span>12-month cash flow projections</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span>✓</span>
-                <span>Tax planning checklist for creative businesses</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span>✓</span>
-                <span>Action steps to stabilize your income</span>
-              </li>
-            </ul>
-
-            <div className="space-y-3">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                className="w-full px-4 py-3 rounded-lg text-gray-900 focus:ring-2 focus:ring-white"
-              />
-              <button
-                onClick={() => alert('In production, this would send results to your email and add to CRM!')}
-                className="w-full bg-white text-green-600 py-3 px-6 rounded-lg font-bold hover:bg-gray-100 transition-colors"
-              >
-                Send Me My Free Report
-              </button>
-              <p className="text-xs opacity-75 text-center">
-                We respect your privacy. No spam, ever.
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => {setStep(1); setRevenues(Array(monthCount).fill('')); setMonthlyExpenses(''); setCurrentSavings(''); setEmail('');}}
-            className="w-full bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-          >
-            ← Start Over with New Data
-          </button>
-        </div>
-      );
-
-      return (
-        <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-          {/* Header */}
-          <header className="bg-white border-b shadow-sm">
-            <div className="max-w-4xl mx-auto px-4 py-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">Two Palms Financial</h1>
-                  <p className="text-sm text-gray-600">Financial Planning for Creative Entrepreneurs</p>
-                </div>
-                <div className="hidden md:block">
-                  <div className="flex items-center gap-2">
-                    {[1, 2, 3, 4].map(s => (
-                      <div key={s} className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold ${
-                        step > s ? 'bg-green-500 text-white' :
-                        step === s ? 'bg-blue-600 text-white' :
-                        'bg-gray-200 text-gray-500'
-                      }`}>
-                        {step > s ? '✓' : s}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          {/* Main Content */}
-          <main className="max-w-4xl mx-auto px-4 py-8">
-            <div className="bg-white rounded-xl shadow-lg p-8">
-              {step === 1 && renderStep1()}
-              {step === 2 && renderStep2()}
-              {step === 3 && renderStep3()}
-              {step === 4 && renderStep4()}
-            </div>
-          </main>
-
-          {/* Footer */}
-          <footer className="bg-gray-900 text-white py-8 mt-16">
-            <div className="max-w-4xl mx-auto px-4 text-center">
-              <p className="text-gray-400 text-sm">
-                © 2026 Two Palms Financial • Helping creative business owners plan for financial freedom
-              </p>
-            </div>
-          </footer>
-        </div>
-      );
+      projections.push({
+        month:getMonthLabel(m),monthIdx:m,
+        revenue:Math.round(monthRevenue),expenses:Math.round(monthExpenses),
+        taxPayment:Math.round(quarterlyTaxPayment),netCashFlow:Math.round(netCashFlow),
+        ownerDraw:Math.round(ownerDraw),bizCash:Math.round(runningBizCash),
+        personalCash:Math.round(runningPersonalCash),
+      });
     }
+    return projections;
+  },[config,stressConfig]);
+}
 
-    ReactDOM.render(<CashFlowSimulator />, document.getElementById('root'));
-  </script>
-</body>
-</html>
+/* ── DASHBOARD TAB ── */
+function DashboardTab({config}) {
+  const projections = useProjections(config,null);
+  if(!projections.length) return null;
+
+  const monthlyFixed = config.expenses.fixed.reduce((s,e)=>{
+    if(e.frequency==="monthly") return s+(e.amount||0);
+    if(e.frequency==="quarterly") return s+(e.amount||0)/3;
+    if(e.frequency==="annual") return s+(e.amount||0)/12;
+    return s;
+  },0);
+
+  const bizReserveTarget = (config.buckets.bizCashReserve||0)+monthlyFixed*(config.buckets.bizOperatingMonths||2);
+  const personalTarget = (config.personalComfortable||0)*config.buckets.personalCheckingMonths;
+
+  const bizStatus = (config.businessCash||0)>=bizReserveTarget?"healthy":(config.businessCash||0)>=bizReserveTarget*0.6?"caution":"danger";
+  const personalStatus = (config.personalCash||0)>=person
