@@ -746,4 +746,259 @@ function DashboardTab({config}) {
   const personalTarget = (config.personalComfortable||0)*config.buckets.personalCheckingMonths;
 
   const bizStatus = (config.businessCash||0)>=bizReserveTarget?"healthy":(config.businessCash||0)>=bizReserveTarget*0.6?"caution":"danger";
-  const personalStatus = (config.personalCash||0)>=person
+  const personalStatus = (config.personalCash||0)>=personalTarget?"healthy":(config.personalCash||0)>=personalTarget*0.6?"caution":"danger";
+
+  const surplusCash = (config.businessCash||0)-bizReserveTarget;
+  const canDistribute = surplusCash>0;
+  const suggestedDist = canDistribute?Math.min(surplusCash*0.7,config.personalComfortable||0):0;
+
+  const runwayMonth = projections.findIndex(p=>p.bizCash<0);
+
+  const next30Revenue = projections.length>0?projections[0].revenue:0;
+  const next3moRevenue = projections.slice(0,3).reduce((s,p)=>s+p.revenue,0);
+  const next6moRevenue = projections.slice(0,6).reduce((s,p)=>s+p.revenue,0);
+  const next12moRevenue = projections.reduce((s,p)=>s+p.revenue,0);
+
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:18}}>
+        <Card>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{fontSize:12,color:"var(--text-muted)"}}>Business Cash</span>
+            <StatusPill status={bizStatus} />
+          </div>
+          <div style={{fontSize:24,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"var(--text-primary)"}}>{fmt(config.businessCash||0)}</div>
+          <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>Target: {fmt(bizReserveTarget)}</div>
+        </Card>
+        <Card>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{fontSize:12,color:"var(--text-muted)"}}>Personal Cash</span>
+            <StatusPill status={personalStatus} />
+          </div>
+          <div style={{fontSize:24,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"var(--text-primary)"}}>{fmt(config.personalCash||0)}</div>
+          <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>Target: {fmt(personalTarget)}</div>
+        </Card>
+      </div>
+
+      <Card title="Revenue Forecast (Confidence-Weighted)">
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+          {[{label:"30 Days",val:next30Revenue},{label:"3 Months",val:next3moRevenue},{label:"6 Months",val:next6moRevenue},{label:"12 Months",val:next12moRevenue}].map(f=>(
+            <div key={f.label} style={{padding:"10px",borderRadius:8,background:"var(--input-bg)",textAlign:"center"}}>
+              <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:2}}>{f.label}</div>
+              <div style={{fontSize:16,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"var(--accent)"}}>{fmt(f.val)}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card title="Can I Take a Distribution?" accent={canDistribute?"#16a34a":"#ef4444"}>
+        {canDistribute ? (
+          <div>
+            <div style={{fontSize:14,color:"#166534",fontWeight:600,marginBottom:6}}>✅ Yes — you have {fmt(surplusCash)} above your reserve targets</div>
+            <div style={{fontSize:13,color:"var(--text-secondary)"}}>
+              Suggested distribution: <strong style={{color:"var(--accent)",fontFamily:"'DM Mono',monospace"}}>{fmt(suggestedDist)}</strong>
+              <span style={{fontSize:11,marginLeft:6}}>(70% of surplus, capped at your comfortable monthly need)</span>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div style={{fontSize:14,color:"#991b1b",fontWeight:600,marginBottom:6}}>⛔ Not yet — you're {fmt(Math.abs(surplusCash))} below reserve targets</div>
+            <div style={{fontSize:13,color:"var(--text-secondary)"}}>Focus on building reserves before taking distributions.</div>
+          </div>
+        )}
+      </Card>
+
+      <Card title="Cash Runway" badge={runwayMonth===-1?{text:"12+ months",bg:"#dcfce7",color:"#166534"}:{text:runwayMonth+" months",bg:"#fee2e2",color:"#991b1b"}}>
+        <div style={{fontSize:13,color:"var(--text-secondary)"}}>
+          {runwayMonth===-1
+            ?"Your business cash stays positive through the full 12-month forecast. Nice work."
+            :"⚠️ Business cash goes negative in "+projections[runwayMonth].month+". Adjust expenses, accelerate revenue, or reduce distributions."}
+        </div>
+      </Card>
+
+      <Card title="12-Month Cash Flow Projection">
+        <ResponsiveContainer width="100%" height={280}>
+          <AreaChart data={projections} margin={{top:10,right:10,left:-10,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="month" tick={{fontSize:11,fill:"var(--text-muted)"}} />
+            <YAxis tick={{fontSize:11,fill:"var(--text-muted)"}} tickFormatter={v=>"$"+(v/1000).toFixed(0)+"k"} />
+            <Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,fontSize:12,background:"#fff",border:"1px solid #e5e0d5"}} />
+            <Legend wrapperStyle={{fontSize:11}} />
+            <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 4" />
+            <Area type="monotone" dataKey="bizCash" name="Business Cash" stroke="#0ea58e" fill="rgba(14,165,142,0.15)" strokeWidth={2} />
+            <Area type="monotone" dataKey="personalCash" name="Personal Cash" stroke="#7c3aed" fill="rgba(124,58,237,0.1)" strokeWidth={2} />
+            <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" fill="rgba(59,130,246,0.08)" strokeWidth={1.5} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </Card>
+
+      <Card title="Monthly Breakdown">
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr style={{borderBottom:"2px solid var(--border)"}}>
+                {["Month","Revenue","Expenses","Tax","Net","Owner Draw","Biz Cash","Personal"].map(h=>(
+                  <th key={h} style={{padding:"6px 8px",textAlign:"right",fontSize:10,color:"var(--text-muted)",textTransform:"uppercase"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {projections.map((p,i)=>(
+                <tr key={i} style={{borderBottom:"1px solid var(--border)",background:p.bizCash<0?"rgba(254,226,226,0.15)":"transparent"}}>
+                  <td style={{padding:"6px 8px",fontWeight:600,textAlign:"left",color:"var(--text-primary)"}}>{p.month}</td>
+                  <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"'DM Mono',monospace",color:"#16a34a"}}>{fmt(p.revenue)}</td>
+                  <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"'DM Mono',monospace",color:"#ef4444"}}>{fmt(p.expenses)}</td>
+                  <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"'DM Mono',monospace",color:"#f97316"}}>{fmt(p.taxPayment)}</td>
+                  <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"'DM Mono',monospace",color:p.netCashFlow>=0?"#16a34a":"#ef4444",fontWeight:700}}>{fmt(p.netCashFlow)}</td>
+                  <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"'DM Mono',monospace",color:"#7c3aed"}}>{fmt(p.ownerDraw)}</td>
+                  <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"'DM Mono',monospace",fontWeight:700,color:p.bizCash>=0?"var(--text-primary)":"#ef4444"}}>{fmt(p.bizCash)}</td>
+                  <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"'DM Mono',monospace",color:p.personalCash>=0?"var(--text-primary)":"#ef4444"}}>{fmt(p.personalCash)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ── STRESS TEST TAB ── */
+function StressTab({config}) {
+  const [stress,setStress] = useState({revenueMult:1,expenseMult:1,delayDays:0,lostClientIdx:-1});
+
+  const baseProjections = useProjections(config,null);
+  const stressProjections = useProjections(config,stress);
+
+  const baseRunway = baseProjections.findIndex(p=>p.bizCash<0);
+  const stressRunway = stressProjections.findIndex(p=>p.bizCash<0);
+
+  const chartData = baseProjections.map((bp,i)=>({month:bp.month,base:bp.bizCash,stressed:stressProjections[i]?.bizCash||0}));
+
+  return (
+    <div>
+      <Card title="Scenario Builder">
+        <SliderWithLabel label="Revenue Shock" value={Math.round(stress.revenueMult*100)} min={30} max={100} step={5}
+          onChange={v=>setStress(p=>({...p,revenueMult:v/100}))} format="percent"
+          helpText={"Model a "+Math.round((1-stress.revenueMult)*100)+"% drop in revenue"} />
+        <SliderWithLabel label="Expense Increase" value={Math.round(stress.expenseMult*100)} min={100} max={150} step={5}
+          onChange={v=>setStress(p=>({...p,expenseMult:v/100}))} format="percent"
+          helpText={"Model a "+Math.round((stress.expenseMult-1)*100)+"% increase in expenses"} />
+        <SliderWithLabel label="Payment Delay (all clients)" value={stress.delayDays} min={0} max={90} step={15}
+          onChange={v=>setStress(p=>({...p,delayDays:v}))}
+          helpText={"What if every payment comes "+stress.delayDays+" days late?"} format="dollar" />
+        {config.pipeline.length>0 && (
+          <SelectInput label="Lose a Client" value={stress.lostClientIdx}
+            onChange={v=>setStress(p=>({...p,lostClientIdx:Number(v)}))}
+            options={[{value:-1,label:"— No client lost —"},...config.pipeline.map((item,i)=>({value:i,label:(item.name||"Unnamed")+" ("+fmt(item.amount)+")"}))] }
+            helpText="What happens if your biggest client disappears?" />
+        )}
+      </Card>
+
+      <Card title="Stress Test: Business Cash Comparison">
+        <div style={{display:"flex",gap:14,marginBottom:14}}>
+          <div style={{flex:1,padding:"10px",borderRadius:8,background:"#dcfce7",textAlign:"center"}}>
+            <div style={{fontSize:11,color:"#166534"}}>Base Runway</div>
+            <div style={{fontSize:20,fontWeight:800,color:"#15803d",fontFamily:"'DM Mono',monospace"}}>{baseRunway===-1?"12+ mo":baseRunway+" mo"}</div>
+          </div>
+          <div style={{flex:1,padding:"10px",borderRadius:8,background:"#fee2e2",textAlign:"center"}}>
+            <div style={{fontSize:11,color:"#991b1b"}}>Stressed Runway</div>
+            <div style={{fontSize:20,fontWeight:800,color:"#dc2626",fontFamily:"'DM Mono',monospace"}}>{stressRunway===-1?"12+ mo":stressRunway+" mo"}</div>
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={250}>
+          <AreaChart data={chartData} margin={{top:10,right:10,left:-10,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="month" tick={{fontSize:11,fill:"var(--text-muted)"}} />
+            <YAxis tick={{fontSize:11,fill:"var(--text-muted)"}} tickFormatter={v=>"$"+(v/1000).toFixed(0)+"k"} />
+            <Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,fontSize:12,background:"#fff",border:"1px solid #e5e0d5"}} />
+            <Legend wrapperStyle={{fontSize:11}} />
+            <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 4" />
+            <Area type="monotone" dataKey="base" name="Base Case" stroke="#16a34a" fill="rgba(22,163,106,0.1)" strokeWidth={2} />
+            <Area type="monotone" dataKey="stressed" name="Stress Case" stroke="#ef4444" fill="rgba(239,68,68,0.1)" strokeWidth={2} strokeDasharray="6 3" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </Card>
+    </div>
+  );
+}
+
+/* ── MAIN APP ── */
+function App() {
+  const [activeTab,setActiveTab] = useState("setup");
+  const [config,setConfig] = useState({
+    entityType:"sole_prop",state:"CA",maxConcurrent:4,
+    taxMode:"simple",taxSimpleRate:25,taxFederal:22,taxState:9.3,taxSE:15.3,
+    ownerSalary:80000,payrollFreq:"biweekly",
+    profitMethod:"monthly_draw",monthlyDraw:5000,profitFirstPct:15,
+    hasHealthPlan:true,healthAdults:1,
+    retirementType:"none",retirementFixed:500,retirementPct:10,
+    seasonality:[100,100,100,100,100,100,100,100,100,100,100,100],
+    personalCash:0,businessCash:0,personalSurvival:0,personalComfortable:0,
+    pipeline:[],
+    expenses:{fixed:[],variable:[],oneOff:[]},
+    buckets:{personalCheckingMonths:1,personalEmergencyMonths:3,bizOperatingMonths:2,taxReservePct:25,bizCashReserve:20000},
+  });
+
+  const renderTab = () => {
+    switch(activeTab) {
+      case "setup": return <SetupTab config={config} setConfig={setConfig} />;
+      case "cash": return <CashTab config={config} setConfig={setConfig} />;
+      case "pipeline": return <PipelineTab config={config} setConfig={setConfig} />;
+      case "expenses": return <ExpensesTab config={config} setConfig={setConfig} />;
+      case "ar": return <ARTab config={config} />;
+      case "buckets": return <BucketsTab config={config} setConfig={setConfig} />;
+      case "dashboard": return <DashboardTab config={config} />;
+      case "stress": return <StressTab config={config} />;
+      default: return null;
+    }
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{padding:"28px 24px 20px",background:"linear-gradient(135deg,#0c3b33 0%,#0a2f28 100%)",borderBottom:"3px solid #0ea58e"}}>
+        <div style={{maxWidth:800,margin:"0 auto"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:6}}>
+            <span style={{fontSize:28}}>🌴🌴</span>
+            <span style={{fontSize:12,color:"#5ebbab",textTransform:"uppercase",letterSpacing:3,fontWeight:600}}>Two Palms Financial</span>
+          </div>
+          <h1 style={{margin:0,fontSize:30,fontWeight:900,fontFamily:"'Playfair Display',serif",color:"#ffffff",lineHeight:1.2}}>
+            Lumpy Smoothy Tool
+          </h1>
+          <p style={{margin:"6px 0 0",fontSize:13,color:"#7ec8ba",maxWidth:500,lineHeight:1.5}}>
+            Cash flow forecasting for business owners with irregular income. See your runway, stress-test your finances, and know when you can pay yourself.
+          </p>
+        </div>
+      </div>
+
+      {/* Nav */}
+      <div style={{position:"sticky",top:0,zIndex:100,background:"#fff",borderBottom:"1px solid var(--border)",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+        <div style={{display:"flex",maxWidth:800,margin:"0 auto",padding:"0 12px"}}>
+          {TABS.map(tab=>(
+            <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
+              style={{padding:"12px 14px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap",background:"transparent",color:activeTab===tab.id?"var(--accent)":"var(--text-muted)",borderBottom:activeTab===tab.id?"2px solid var(--accent)":"2px solid transparent",transition:"all 0.15s"}}>
+              <span style={{marginRight:4}}>{tab.icon}</span>{tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{maxWidth:800,margin:"0 auto",padding:"20px 16px 60px"}}>
+        {renderTab()}
+      </div>
+
+      {/* Footer */}
+      <div style={{textAlign:"center",padding:"20px",fontSize:11,color:"var(--text-muted)",borderTop:"1px solid var(--border)"}}>
+        ⚠️ No data is saved or transmitted. All calculations run locally in your browser. This tool is for educational purposes only — not financial advice.
+        <br/>© Two Palms Financial · Built for business owners who lose sleep over cash flow
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
